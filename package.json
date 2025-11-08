@@ -1,0 +1,13 @@
+{
+  "name": "intelwire-proxy-app",
+  "version": "1.0.0",
+  "description": "Secure proxy for IntelWire site",
+  "main": "api/generate.js",
+  "type": "module",
+  "scripts": {
+    "start": "echo 'Run from Vercel'"
+  },
+  "dependencies": {}
+}
+
+
