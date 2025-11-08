@@ -72,16 +72,19 @@
 </head>
 <body class="newspaper-font min-h-screen antialiased">
 
+    <!-- Main Container -->
     <div id="app" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
+        <!-- Masthead (Header) -->
         <header class="py-8 border-b-2 border-white mb-4">
             <div class="flex flex-col items-center">
                 <p class="text-xs tracking-widest uppercase mb-1 text-gray-400">The Global Cyber Intelligence Dispatch</p>
                 <h1 class="masthead-font text-7xl sm:text-8xl font-extrabold tracking-tight">IntelWire</h1>
-                <p class="text-xs mt-2 text-gray-400">MONDAY, OCT 27, 2025 | VOLUME I | SINCE 2025 | READERSHIP: GLOBAL</p>
+                <p class="text-xs mt-2 text-gray-400">MONDAY, OCT 27, 2025 | VOLUME XXI | SINCE 2025 | READERSHIP: GLOBAL</p>
             </div>
         </header>
 
+        <!-- Search Bar Added Here -->
         <div class="mb-6">
             <form id="search-form" onsubmit="handleSearch(event)" class="flex justify-center">
                 <input 
@@ -95,6 +98,9 @@
                 </button>
             </form>
         </div>
+        <!-- End Search Bar -->
+
+        <!-- Navigation -->
         <nav class="sticky top-0 z-10 bg-[#1a1a1a] border-b border-t border-gray-700 py-3 mb-6 shadow-2xl shadow-black">
             <div id="nav-container" class="flex flex-wrap justify-center gap-2 sm:gap-4 text-xs sm:text-sm">
                 <button onclick="renderView('latest')" data-view="latest" class="nav-button active uppercase px-3 py-1 border border-white rounded-sm">Latest Cyber Attacks</button>
@@ -107,8 +113,10 @@
             </div>
         </nav>
 
+        <!-- Main Content Area -->
         <main id="content-area" class="pb-16 pt-4"></main>
 
+        <!-- Footer -->
         <footer class="text-center py-6 border-t border-gray-700 mt-8 text-gray-400 text-xs">
             © 2025 IntelWire. All Rights Reserved. Cyber Intelligence for a Connected World.
         </footer>
@@ -119,10 +127,9 @@
         const contentArea = document.getElementById('content-area');
         const navButtons = document.querySelectorAll('.nav-button');
 
-        // --- GEMINI API CONFIGURATION (SECURE PROXY) ---
-        // The API key is now securely handled on the backend (e.g., Vercel Serverless Function).
-        // The client-side code calls a local endpoint.
-        const PROXY_API_URL = "/api/generate-content"; 
+        // --- GEMINI API CONFIGURATION (Client-Side Schema Definition) ---
+        // CRITICAL FIX: Removed apiKey and apiUrl. The call is now routed through the secure proxy: /api/generate
+        const API_MODEL = "gemini-2.5-flash-preview-09-2025"; 
 
         // Define the JSON schema for the structured response
         const ARTICLE_SCHEMA = {
@@ -140,8 +147,7 @@
         };
 
         /**
-         * Calls the secure proxy endpoint with exponential backoff for content generation.
-         * The proxy is responsible for adding the secret API key and calling Gemini.
+         * Calls the Secure Serverless Proxy with exponential backoff for content generation.
          * @param {string} userQuery - The prompt for the model.
          * @param {string} systemPrompt - The persona instruction for the model.
          * @returns {Promise<Array<Object>|null>} - Generated articles or null on failure.
@@ -152,31 +158,34 @@
 
             for (let i = 0; i < MAX_RETRIES; i++) {
                 try {
-                    // Send necessary data to the Vercel Serverless Function
-                    const payload = {
+                    // Send all necessary config to the secure proxy
+                    const proxyPayload = {
                         userQuery: userQuery,
                         systemPrompt: systemPrompt,
-                        responseSchema: ARTICLE_SCHEMA // Send schema so the backend knows the desired output
+                        responseSchema: ARTICLE_SCHEMA,
+                        model: API_MODEL
                     };
 
-                    const response = await fetch(PROXY_API_URL, {
+                    // CRITICAL FIX: Call the secure proxy endpoint
+                    const response = await fetch('/api/generate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
+                        body: JSON.stringify(proxyPayload)
                     });
 
-                    // The Vercel function should return the final, clean JSON data
                     if (!response.ok) {
-                        // Check for specific error status codes from the proxy
-                        throw new Error(`Proxy error! status: ${response.status}. Gemini API call failed.`);
+                         const errorDetails = await response.text();
+                         throw new Error(`Proxy failed: ${response.status} - ${errorDetails.substring(0, 100)}...`);
                     }
 
-                    const articles = await response.json();
+                    const result = await response.json();
                     
-                    if (!articles || articles.length === 0) {
-                        throw new Error("Proxy returned empty or invalid data structure.");
+                    if (result.error) {
+                         throw new Error(`Proxy error: ${result.error}`);
                     }
-                    
+
+                    // The proxy returns a JSON string, which we must parse
+                    const articles = JSON.parse(result.generatedJsonText);
                     return articles;
 
                 } catch (error) {
@@ -191,7 +200,7 @@
             }
         }
 
-        // --- RENDER FUNCTIONS ---
+        // --- RENDER FUNCTIONS (Subscription form remains the same) ---
 
         /**
          * Renders the subscription form page.
@@ -286,7 +295,6 @@
 
             const systemPrompt = "You are a lead editor for IntelWire, a high-contrast black and white cyber security newspaper. Your task is to generate 5 distinct, recent, and highly critical news articles in JSON format for the specified category. Use Google Search to ensure the information is up-to-date and factual. Be concise, urgent, and professional. The date must be current or within the last week. The excerpt must be a maximum of 4 sentences. The output MUST be only a JSON array matching the schema.";
             
-            // Call the secure function
             const articles = await generateContent(userQuery, systemPrompt);
 
             if (!articles || articles.length === 0) {
@@ -295,7 +303,7 @@
                     <h2 class="text-4xl masthead-font font-bold mb-6 border-b pb-2 uppercase">${title}</h2>
                     <div class="text-center p-6 bg-red-900/50 border border-red-700 rounded-lg">
                         <p class="text-red-300 font-bold">ERROR: Could not retrieve real-time intelligence.</p>
-                        <p class="text-red-300 text-sm mt-2">The IntelWire servers are currently experiencing high traffic or the AI source failed to deliver content. Please try again in a moment. (Ensure your Vercel Serverless Function is configured correctly.)</p>
+                        <p class="text-red-300 text-sm mt-2">The IntelWire servers are currently experiencing high traffic or the AI source failed to deliver content. Please try again in a moment.</p>
                     </div>
                 `;
                 return;
@@ -356,6 +364,7 @@
             } else if (viewName === 'search') {
                 const title = `Search Results for: "${searchTerm}"`;
                 const query = `Generate 5 articles based specifically on the search query: ${searchTerm}`;
+                // No button gets active state for search results
                 renderNewsView(title, query);
             } else {
                 // Handle category views
@@ -382,3 +391,5 @@
     </script>
 </body>
 </html>
+
+
