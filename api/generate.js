@@ -1,5 +1,5 @@
 // api/generate.js - This code runs securely on the Vercel/Netlify server
-// This uses the Node.js native fetch API
+
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
@@ -10,7 +10,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 export default async (req, res) => {
     // 1. Check for the secret key
     if (!GEMINI_API_KEY) {
-        res.status(500).json({ error: 'Server configuration error: API Key not set.' });
+        // Send a non-specific server error message to the client for security
+        res.status(500).json({ error: 'Server configuration error. API Key is missing.' });
         return;
     }
     
@@ -21,20 +22,32 @@ export default async (req, res) => {
     }
 
     try {
-        const { prompt } = req.body;
+        // Retrieve the complex payload sent from the client
+        const { userQuery, systemPrompt, responseSchema, model } = req.body;
 
-        if (!prompt) {
-            res.status(400).json({ error: 'Prompt is missing in the request body.' });
+        if (!userQuery || !systemPrompt || !responseSchema) {
+            res.status(400).json({ error: 'Missing required parameters (query, system prompt, or schema) in request body.' });
             return;
         }
 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+        // Define the target API endpoint using the secured key
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
         
+        // Construct the full Gemini API payload based on client data
         const payload = {
-            contents: [{ parts: [{ text: prompt }] }],
-            // Optional: You can include system instructions or tools here if needed
+            contents: [{ parts: [{ text: userQuery }] }],
+            // Enable Google Search for real-time grounding
+            tools: [{ "google_search": {} }],
+            systemInstruction: {
+                parts: [{ text: systemPrompt }]
+            },
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: responseSchema
+            }
         };
 
+        // Forward the request to the Gemini API
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -42,11 +55,13 @@ export default async (req, res) => {
         });
 
         const result = await response.json();
-        const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        // Check for generated content (which will be a JSON string)
+        const generatedJsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        if (generatedText) {
-            // Success: Send only the final generated text back to the client
-            res.status(200).json({ generatedText });
+        if (generatedJsonText) {
+            // Success: Send the raw JSON string text back to the client
+            res.status(200).json({ generatedJsonText });
         } else {
             // Handle error response from Gemini API (e.g., safety block)
             const errorReason = JSON.stringify(result.error || result, null, 2);
@@ -59,16 +74,4 @@ export default async (req, res) => {
     }
 };
 
-#### Step 2: Set the Secret Environment Variable
-
-1.  Push both your `index.html` and the new `api/generate.js` file to your GitHub repository.
-2.  Log in to **Vercel** or **Netlify** and import your GitHub repository.
-3.  Go to your project's **Settings** tab.
-4.  Find the **Environment Variables** section.
-5.  Create a new variable with the following name and value:
-    * **Name:** `GEMINI_API_KEY`
-    * **Value:** `YOUR_ACTUAL_GEMINI_API_KEY_HERE` (Paste your real key here)
-6.  Redeploy your project.
-
-Once the deployment is complete, your key will be securely stored on the serverless platform and used only by the `generate.js` file, making your web app both functional and secure!
 
